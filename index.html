@@ -181,13 +181,15 @@
             </div>
         </div>
 
-        <!-- 2. BARRA DE PESQUISA -->
-        <div class="card mb-4">
-            <div class="card-body py-2">
-                <div class="row g-2 align-items-center">
-                    <div class="col-md-2 fw-bold text-secondary"><i class="bi bi-funnel"></i> Filtros:</div>
+        <!-- 2. BARRA DE PESQUISA (Agora com mais destaque) -->
+        <div class="card mb-4 border-primary">
+            <div class="card-header bg-light text-primary fw-bold">
+                <i class="bi bi-search"></i> Pesquisar na Equipe
+            </div>
+            <div class="card-body py-3">
+                <div class="row g-3 align-items-center">
                     <div class="col-md-3">
-                        <select v-model="search.criteria" class="form-select form-select-sm">
+                        <select v-model="search.criteria" class="form-select">
                             <option value="all">Todos os campos</option>
                             <option value="status">Status (Férias/Disponível)</option>
                             <option value="type">Vínculo</option>
@@ -197,11 +199,16 @@
                             <option value="task_status">Status Tarefa (Pendente/Concluído)</option>
                         </select>
                     </div>
-                    <div class="col-md-5">
-                        <input type="text" v-model="search.term" class="form-control form-control-sm" placeholder="Digite para pesquisar...">
+                    <div class="col-md-7">
+                        <div class="input-group">
+                            <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                            <input type="text" v-model="search.term" class="form-control" placeholder="Digite o que deseja buscar...">
+                        </div>
                     </div>
                     <div class="col-md-2 text-end">
-                        <button @click="clearSearch" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-x-circle"></i> Limpar</button>
+                        <button @click="clearSearch" class="btn btn-outline-secondary w-100">
+                            <i class="bi bi-eraser"></i> Limpar
+                        </button>
                     </div>
                 </div>
             </div>
