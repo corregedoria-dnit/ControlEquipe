@@ -295,9 +295,10 @@
     <script>
         // CONFIGURAÇÃO SUPABASE
         const SUPABASE_URL = 'https://keqrzdmoeqsagzdsqhkk.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtlcXJ6ZG1vZXFzYWd6ZHNxaGtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODUwMzEsImV4cCI6MjA5MTQ2MTAzMX0.y8fEwD8UOUByr98YvXrc6_bm94YWOicEtoB56jDLcbw'; // CHAVE INSERIDA AQUI
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtlcXJ6ZG1vZXFzYWd6ZHNxaGtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODUwMzEsImV4cCI6MjA5MTQ2MTAzMX0.y8fEwD8UOUByr98YvXrc6_bm94YWOicEtoB56jDLcbw'; 
         
-        const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Correção do cliente Supabase
+        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         new Vue({
             el: '#app',
@@ -365,7 +366,7 @@
             methods: {
                 // --- SUPABASE INTEGRATION ---
                 async loadData() {
-                    const { data, error } = await supabase.from('equipe').select('*');
+                    const { data, error } = await db.from('equipe').select('*');
                     if (error) {
                         console.error('Erro ao carregar dados:', error);
                         return;
@@ -379,7 +380,7 @@
                 },
                 
                 setupRealtime() {
-                    supabase.channel('equipe_changes')
+                    db.channel('equipe_changes')
                         .on('postgres_changes', { event: '*', schema: 'public', table: 'equipe' }, payload => {
                             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
                                 this.$set(this.membersMap, payload.new.id, payload.new);
@@ -452,7 +453,7 @@
                     var current = processes[processIndex].status;
                     processes[processIndex].status = (current === 'Pendente' ? 'Concluído' : 'Pendente');
                     
-                    const { error } = await supabase
+                    const { error } = await db
                         .from('equipe')
                         .update({ processes_json: processes })
                         .eq('id', member.id);
@@ -503,10 +504,10 @@
                     };
 
                     if (this.form.id) {
-                        const { error } = await supabase.from('equipe').update(dataToSave).eq('id', this.form.id);
+                        const { error } = await db.from('equipe').update(dataToSave).eq('id', this.form.id);
                         if (error) alert('Erro ao atualizar: ' + error.message);
                     } else {
-                        const { error } = await supabase.from('equipe').insert([dataToSave]);
+                        const { error } = await db.from('equipe').insert([dataToSave]);
                         if (error) alert('Erro ao salvar: ' + error.message);
                     }
                     
@@ -538,7 +539,7 @@
                 },
                 async deleteMember(id) {
                     if (confirm('Deseja realmente excluir este registro?')) {
-                        const { error } = await supabase.from('equipe').delete().eq('id', id);
+                        const { error } = await db.from('equipe').delete().eq('id', id);
                         if (error) alert('Erro ao excluir: ' + error.message);
                     }
                 },
