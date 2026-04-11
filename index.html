@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Controle de Equipe - Gun.js</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Ícones Bootstrap -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .card { margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: none; }
+        .vacation-group { background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; }
+        
+        /* Estilo para linha verde quando tem processos */
+        .table-success-custom { background-color: #f1fcf5 !important; }
+        
+        /* Badges */
+        .badge-ferias { background-color: #ffc107; color: #000; }
+        .badge-disponivel { background-color: #198754; color: #fff; }
+        .badge-pref { cursor: default; display: inline-flex; align-items: center; }
+        .badge-pref .btn-close-badge { margin-left: 5px; cursor: pointer; font-size: 0.8em; }
+        .badge-pref .btn-close-badge:hover { color: #ffcccc; }
+
+        /* Estilos de Status e Visualização */
+        .proc-date { font-size: 0.85em; color: #6c757d; display: inline-block; margin-left: 10px;}
+        .process-row:hover { background-color: rgba(0,0,0,0.03); border-radius: 4px; }
+        
+        /* Ajuste inputs dentro da tabela de edição */
+        .table-input { border: 1px solid #ced4da; border-radius: 3px; padding: 2px 5px; width: 100%; font-size: 0.9em; }
+        .table-input:focus { border-color: #86b7fe; outline: 0; box-shadow: 0 0 0 0.25rem rgba(13,110,253,.25); }
+
+        [v-cloak] { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="container" v-cloak>
+    <h2 class="mb-4 text-center text-primary fw-bold"><i class="bi bi-people-fill"></i> Controle de Equipe</h2>
+
+    <!-- 1. FORMULÁRIO (Agora no topo) -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <span class="fw-bold">{{ form.id ? 'Editar Registro' : 'Novo Registro' }}</span>
+            <button v-if="form.id" @click="resetForm" class="btn btn-sm btn-light text-primary fw-bold">Cancelar Edição</button>
+        </div>
+        <div class="card-body">
+            <form @submit.prevent="saveMember">
+                <!-- Linha 1: Dados Pessoais e Matérias -->
+                <div class="row mb-3">
+                    <div class="col-md-5">
+                        <label class="form-label">Nome Completo</label>
+                        <input type="text" v-model="form.name" class="form-control" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Vínculo</label>
+                        <select v-model="form.type" class="form-control" required>
+                            <option value="Colaborador">Colaborador</option>
+                            <option value="Servidor">Servidor</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Matéria lista -->
+                    <div class="col-md-4">
+                        <label class="form-label">Matérias de Preferência</label>
+                        <div class="input-group">
+                            <input type="text" v-model="preferenceInput" class="form-control" placeholder="Ex: Civil (Enter)" @keydown.enter.prevent="addPreference">
+                            <button class="btn btn-outline-secondary" type="button" @click="addPreference">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                        <div class="mt-2">
+                            <span v-for="(pref, index) in form.preferenceList" :key="index" class="badge bg-secondary me-1 mb-1 badge-pref">
+                                {{ pref }} 
+                                <span class="btn-close-badge" @click="removePreference(index)">&times;</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Linha 2: Férias -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-secondary">Programação de Férias</label>
+                    <div class="row vacation-group mx-0">
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block mb-1">1º Período</small>
+                            <div class="input-group input-group-sm">
+                                <input type="date" v-model="form.vacation1_start" class="form-control">
+                                <span class="input-group-text">até</span>
+                                <input type="date" v-model="form.vacation1_end" class="form-control">
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block mb-1">2º Período</small>
+                            <div class="input-group input-group-sm">
+                                <input type="date" v-model="form.vacation2_start" class="form-control">
+                                <span class="input-group-text">até</span>
+                                <input type="date" v-model="form.vacation2_end" class="form-control">
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block mb-1">3º Período</small>
+                            <div class="input-group input-group-sm">
+                                <input type="date" v-model="form.vacation3_start" class="form-control">
+                                <span class="input-group-text">até</span>
+                                <input type="date" v-model="form.vacation3_end" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Linha 3: Processos e Tarefas -->
+                <div class="mb-3 border p-3 rounded bg-white">
+                    <label class="form-label fw-bold text-secondary mb-2">Gerenciar Processos / Tarefas</label>
+                    
+                    <!-- Inputs para ADICIONAR NOVO -->
+                    <div class="row g-2 align-items-end mb-3 pb-3 border-bottom">
+                        <div class="col-md-3">
+                            <label class="small text-muted">Número (Novo)</label>
+                            <input type="text" 
+                                   v-model="processInput.number" 
+                                   @input="maskProcessNumber"
+                                   maxlength="20"
+                                   class="form-control form-control-sm" 
+                                   placeholder="00000.000000/0000-00">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="small text-muted">Objeto / Tarefa</label>
+                            <input type="text" v-model="processInput.object" class="form-control form-control-sm" placeholder="Descrição...">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small text-muted">Prazo</label>
+                            <input type="date" v-model="processInput.deadline" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" @click="addProcess" class="btn btn-sm btn-secondary w-100">
+                                <i class="bi bi-plus-lg"></i> Adicionar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de processos NO FORMULÁRIO (EDITÁVEL) -->
+                    <div v-if="form.processList.length > 0">
+                        <label class="small fw-bold text-primary mb-2">Processos Atribuídos (Edite diretamente nos campos abaixo):</label>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 50px;">Status</th>
+                                        <th style="min-width: 180px;">Número</th>
+                                        <th>Objeto</th>
+                                        <th style="width: 130px;">Prazo</th>
+                                        <th style="width: 50px;">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(proc, index) in form.processList" :key="index">
+                                        <td class="text-center align-middle">
+                                            <button type="button" class="btn btn-sm" 
+                                                :class="proc.status === 'Concluído' ? 'btn-success' : 'btn-outline-warning text-dark'"
+                                                @click="toggleProcessStatusInForm(index)"
+                                                title="Alternar Status">
+                                                <i class="bi" :class="proc.status === 'Concluído' ? 'bi-check-lg' : 'bi-hourglass'"></i>
+                                            </button>
+                                        </td>
+                                        <td>
+                                            <input type="text" 
+                                                   class="table-input" 
+                                                   v-model="proc.number"
+                                                   @input="maskProcessNumberRow(proc, $event)"
+                                                   maxlength="20">
+                                        </td>
+                                        <td>
+                                            <input type="text" class="table-input" v-model="proc.object">
+                                        </td>
+                                        <td>
+                                            <input type="date" class="table-input" v-model="proc.deadline">
+                                        </td>
+                                        <td class="text-center align-middle">
+                                            <button type="button" @click="removeProcess(index)" class="btn btn-link text-danger p-0">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div v-if="processError" class="text-danger small mt-1">{{ processError }}</div>
+                </div>
+
+                <!-- Linha 4: Observações -->
+                <div class="mb-3">
+                    <label class="form-label">Observações Gerais</label>
+                    <textarea v-model="form.observations" class="form-control" rows="2"></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-success w-100 fw-bold shadow-sm">
+                    <i class="bi bi-check-lg"></i> {{ form.id ? 'Atualizar Registro' : 'Salvar Registro' }}
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. BARRA DE PESQUISA (Movida para o meio) -->
+    <div class="card mb-4 border-primary">
+        <div class="card-body bg-light">
+            <h6 class="card-subtitle mb-2 text-muted fw-bold">Filtrar Registros</h6>
+            <div class="row g-2 align-items-center">
+                <div class="col-md-2">
+                    <select v-model="search.criteria" class="form-select form-select-sm">
+                        <option value="all">Todos os campos</option>
+                        <option value="status">Status (Férias/Disp.)</option>
+                        <option value="type">Tipo de Vínculo</option>
+                        <option value="preference">Matéria</option>
+                        <option value="process_number">Nº Processo</option>
+                        <option value="process_object">Objeto Processo</option>
+                        <option value="task_status">Status Tarefa (Pend/Conc)</option>
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <select v-if="search.criteria === 'status'" v-model="search.term" class="form-select form-select-sm">
+                        <option value="">Selecione...</option>
+                        <option value="ferias">Em Férias</option>
+                        <option value="disponivel">À Disposição</option>
+                    </select>
+                    
+                    <select v-else-if="search.criteria === 'type'" v-model="search.term" class="form-select form-select-sm">
+                        <option value="">Selecione...</option>
+                        <option value="Colaborador">Colaborador</option>
+                        <option value="Servidor">Servidor</option>
+                    </select>
+
+                    <select v-else-if="search.criteria === 'task_status'" v-model="search.term" class="form-select form-select-sm">
+                        <option value="">Selecione...</option>
+                        <option value="Pendente">Pendente</option>
+                        <option value="Concluído">Concluído</option>
+                    </select>
+
+                    <input v-else type="text" v-model="search.term" class="form-control form-control-sm" placeholder="Digite para pesquisar...">
+                </div>
+                <div class="col-md-2 text-end">
+                    <button @click="clearSearch" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-x-circle"></i> Limpar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. TABELA DE RESULTADOS -->
+    <div class="card">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <span>Resultados da Pesquisa</span>
+            <span class="badge bg-light text-dark">{{ filteredMembers.length }} encontrados</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nome / Status</th>
+                            <th>Vínculo</th>
+                            <th style="width: 15%;">Matérias</th>
+                            <th>Férias</th>
+                            <th style="width: 35%;">Processos / Tarefas</th>
+                            <th>Obs</th>
+                            <th style="width: 80px;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="member in filteredMembers" :key="member.id" :class="{ 'table-success-custom': hasProcesses(member) }">
+                            <td>
+                                <div class="fw-bold">{{ member.name }}</div>
+                                <span class="badge rounded-pill mt-1" 
+                                      :class="checkStatus(member) === 'Em Férias' ? 'badge-ferias' : 'badge-disponivel'">
+                                    {{ checkStatus(member) }}
+                                </span>
+                            </td>
+                            <td>{{ member.type }}</td>
+                            <td>
+                                <div v-if="getPreferenceArray(member).length > 0">
+                                    <span v-for="(pref, idx) in getPreferenceArray(member)" :key="idx" class="badge bg-secondary me-1 mb-1">
+                                        {{ pref }}
+                                    </span>
+                                </div>
+                                <span v-else class="text-muted small">-</span>
+                            </td>
+                            <td style="font-size: 0.8em; min-width: 130px;">
+                                <div v-if="member.vacation1_start">1: {{ formatDate(member.vacation1_start) }} a {{ formatDate(member.vacation1_end) }}</div>
+                                <div v-if="member.vacation2_start">2: {{ formatDate(member.vacation2_start) }} a {{ formatDate(member.vacation2_end) }}</div>
+                                <div v-if="member.vacation3_start">3: {{ formatDate(member.vacation3_start) }} a {{ formatDate(member.vacation3_end) }}</div>
+                            </td>
+                            <td>
+                                <div v-if="getProcessArray(member).length > 0">
+                                    <div v-for="(proc, idx) in getProcessArray(member)" :key="idx" class="border-bottom py-2 process-row px-1">
+                                        <div class="d-flex align-items-center">
+                                            <button class="btn btn-sm me-2" 
+                                                    :class="proc.status === 'Concluído' ? 'btn-success' : 'btn-outline-warning text-dark'"
+                                                    @click="toggleStatusInTable(member, idx)"
+                                                    title="Clique para alterar status">
+                                                <i class="bi" :class="proc.status === 'Concluído' ? 'bi-check-lg' : 'bi-circle'"></i>
+                                            </button>
+                                            
+                                            <div class="flex-grow-1">
+                                                <div class="d-flex justify-content-between">
+                                                    <span class="fw-bold" style="font-size: 0.9em;">{{ proc.number }}</span>
+                                                    <span class="badge bg-light text-dark border">{{ proc.status }}</span>
+                                                </div>
+                                                <div class="fst-italic text-muted small">{{ proc.object }}</div>
+                                                <div v-if="proc.deadline" class="text-danger small mt-1">
+                                                    <i class="bi bi-calendar-event"></i> Prazo: {{ formatDate(proc.deadline) }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <span v-else class="text-muted small">- Nenhum -</span>
+                            </td>
+                            <td><small>{{ member.observations }}</small></td>
+                            <td>
+                                <div class="btn-group-vertical w-100">
+                                    <button class="btn btn-sm btn-outline-primary mb-1" @click="editMember(member)">Editar</button>
+                                    <button class="btn btn-sm btn-outline-danger" @click="deleteMember(member.id)">Excluir</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="filteredMembers.length === 0">
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="bi bi-search fs-4"></i><br>
+                                Nenhum registro encontrado com os critérios atuais.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var gun = Gun();
+    var teamDB = gun.get('sistema_equipe_v10'); // Mantendo a base v10
+
+    new Vue({
+        el: '#app',
+        data: {
+            membersMap: {},
+            search: { term: '', criteria: 'all' },
+            processInput: { number: '', object: '', deadline: '' },
+            processError: '',
+            preferenceInput: '',
+            form: {
+                id: null,
+                name: '',
+                type: 'Colaborador',
+                preferenceList: [], 
+                vacation1_start: '', vacation1_end: '',
+                vacation2_start: '', vacation2_end: '',
+                vacation3_start: '', vacation3_end: '',
+                processList: [], 
+                observations: ''
+            }
+        },
+        computed: {
+            filteredMembers() {
+                var list = [];
+                for (var key in this.membersMap) {
+                    var m = this.membersMap[key];
+                    if (m && m.name) { list.push(m); }
+                }
+
+                var term = this.search.term.toLowerCase();
+                var criteria = this.search.criteria;
+
+                if (term) {
+                    list = list.filter(m => {
+                        if (criteria === 'status') {
+                            var status = this.checkStatus(m);
+                            if (term === 'ferias') return status === 'Em Férias';
+                            if (term === 'disponivel') return status === 'À Disposição';
+                            return true;
+                        }
+                        if (criteria === 'type') return m.type.toLowerCase() === term;
+                        if (criteria === 'preference') {
+                            var prefs = this.getPreferenceArray(m);
+                            return prefs.some(p => p.toLowerCase().includes(term));
+                        }
+                        var procs = this.getProcessArray(m);
+                        if (criteria === 'task_status') return procs.some(p => p.status === this.search.term);
+                        if (criteria === 'process_number') return procs.some(p => p.number.includes(term));
+                        if (criteria === 'process_object') return procs.some(p => p.object.toLowerCase().includes(term));
+
+                        if (criteria === 'all') {
+                            var prefs = this.getPreferenceArray(m);
+                            var inBasicInfo = (m.name || '').toLowerCase().includes(term) ||
+                                              (m.type || '').toLowerCase().includes(term) ||
+                                              prefs.some(p => p.toLowerCase().includes(term));
+                            var inProcesses = procs.some(p => p.number.includes(term) || p.object.toLowerCase().includes(term));
+                            return inBasicInfo || inProcesses;
+                        }
+                        return true;
+                    });
+                }
+                return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            }
+        },
+        mounted() {
+            var self = this;
+            teamDB.map().on(function(data, id) {
+                if (!data || data.name === null) {
+                    self.$delete(self.membersMap, id);
+                    return;
+                }
+                var member = { ...data, id: id };
+                self.$set(self.membersMap, id, member);
+            });
+        },
+        methods: {
+            // --- MATÉRIAS ---
+            addPreference() {
+                var val = this.preferenceInput.trim();
+                if(val) {
+                    this.form.preferenceList.push(val);
+                    this.preferenceInput = '';
+                }
+            },
+            removePreference(index) {
+                this.form.preferenceList.splice(index, 1);
+            },
+            getPreferenceArray(member) {
+                try {
+                    return member.preferencesJson ? JSON.parse(member.preferencesJson) : [];
+                } catch (e) { return []; }
+            },
+
+            // --- PROCESSOS / TAREFAS ---
+            applyMaskLogic(value) {
+                let v = value.replace(/\D/g, "");
+                v = v.slice(0, 17);
+                if (v.length > 15) v = v.replace(/^(\d{5})(\d{6})(\d{4})(\d{1,2})/, "$1.$2/$3-$4");
+                else if (v.length > 11) v = v.replace(/^(\d{5})(\d{6})(\d{1,4})/, "$1.$2/$3");
+                else if (v.length > 5) v = v.replace(/^(\d{5})(\d{1,6})/, "$1.$2");
+                return v;
+            },
+
+            // Máscara para o input de NOVO processo
+            maskProcessNumber(e) {
+                this.processInput.number = this.applyMaskLogic(e.target.value);
+            },
+
+            // Máscara para o input de EDIÇÃO na lista
+            maskProcessNumberRow(proc, e) {
+                proc.number = this.applyMaskLogic(e.target.value);
+            },
+
+            addProcess() {
+                var num = this.processInput.number.trim();
+                var obj = this.processInput.object.trim();
+                var deadline = this.processInput.deadline;
+                
+                var regex = /^\d{5}\.\d{6}\/\d{4}-\d{2}$/;
+                if (!regex.test(num)) {
+                    this.processError = 'Formato incompleto! Deve ser: 00000.000000/0000-00';
+                    return;
+                }
+                if (!obj) {
+                    this.processError = 'O objeto do processo é obrigatório.';
+                    return;
+                }
+
+                this.form.processList.push({ 
+                    number: num, object: obj, deadline: deadline, status: 'Pendente'
+                });
+                
+                this.processInput.number = '';
+                this.processInput.object = '';
+                this.processInput.deadline = '';
+                this.processError = '';
+            },
+
+            toggleProcessStatusInForm(index) {
+                var current = this.form.processList[index].status;
+                var novo = (current === 'Pendente' ? 'Concluído' : 'Pendente');
+                this.$set(this.form.processList[index], 'status', novo);
+            },
+
+            toggleStatusInTable(member, processIndex) {
+                var processes = this.getProcessArray(member);
+                if (!processes[processIndex]) return;
+                var current = processes[processIndex].status;
+                processes[processIndex].status = (current === 'Pendente' ? 'Concluído' : 'Pendente');
+                var jsonStr = JSON.stringify(processes);
+                gun.get(member.id).put({ processesJson: jsonStr });
+            },
+
+            removeProcess(index) {
+                this.form.processList.splice(index, 1);
+            },
+            getProcessArray(member) {
+                try {
+                    return member.processesJson ? JSON.parse(member.processesJson) : [];
+                } catch (e) { return []; }
+            },
+            hasProcesses(member) {
+                return this.getProcessArray(member).length > 0;
+            },
+
+            // --- CRUD ---
+            saveMember() {
+                // Validação final de todos os processos (inclusive os editados)
+                var regex = /^\d{5}\.\d{6}\/\d{4}-\d{2}$/;
+                for(var i=0; i < this.form.processList.length; i++) {
+                    var p = this.form.processList[i];
+                    if(!regex.test(p.number)) {
+                        this.processError = `Erro no item ${i+1}: Formato do processo inválido. Corrija antes de salvar.`;
+                        return;
+                    }
+                    if(!p.object) {
+                        this.processError = `Erro no item ${i+1}: Objeto não pode ser vazio.`;
+                        return;
+                    }
+                }
+                this.processError = '';
+
+                var processesString = JSON.stringify(this.form.processList);
+                var preferencesString = JSON.stringify(this.form.preferenceList);
+                
+                var dataToSave = {
+                    name: this.form.name,
+                    type: this.form.type,
+                    preferencesJson: preferencesString,
+                    vacation1_start: this.form.vacation1_start,
+                    vacation1_end: this.form.vacation1_end,
+                    vacation2_start: this.form.vacation2_start,
+                    vacation2_end: this.form.vacation2_end,
+                    vacation3_start: this.form.vacation3_start,
+                    vacation3_end: this.form.vacation3_end,
+                    processesJson: processesString,
+                    observations: this.form.observations
+                };
+
+                if (this.form.id) {
+                    gun.get(this.form.id).put(dataToSave);
+                } else {
+                    teamDB.set(dataToSave);
+                }
+                this.resetForm();
+            },
+
+            editMember(member) {
+                var cloned = JSON.parse(JSON.stringify(member));
+                var pList = [];
+                if (cloned.processesJson) { 
+                    try { 
+                        pList = JSON.parse(cloned.processesJson); 
+                        pList.forEach(p => { if(!p.status) p.status = 'Pendente'; });
+                    } catch(e) {} 
+                }
+                var prefList = [];
+                if (cloned.preferencesJson) { try { prefList = JSON.parse(cloned.preferencesJson); } catch(e) {} }
+
+                this.form = {
+                    id: cloned.id,
+                    name: cloned.name,
+                    type: cloned.type,
+                    preferenceList: prefList,
+                    vacation1_start: cloned.vacation1_start,
+                    vacation1_end: cloned.vacation1_end,
+                    vacation2_start: cloned.vacation2_start,
+                    vacation2_end: cloned.vacation2_end,
+                    vacation3_start: cloned.vacation3_start,
+                    vacation3_end: cloned.vacation3_end,
+                    processList: pList,
+                    observations: cloned.observations
+                };
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            },
+
+            deleteMember(id) {
+                if (confirm('Deseja realmente excluir este registro?')) {
+                    gun.get(id).put({ name: null });
+                    this.$delete(this.membersMap, id);
+                }
+            },
+
+            resetForm() {
+                this.form = {
+                    id: null, name: '', type: 'Colaborador', preferenceList: [],
+                    vacation1_start: '', vacation1_end: '',
+                    vacation2_start: '', vacation2_end: '',
+                    vacation3_start: '', vacation3_end: '',
+                    processList: [], observations: ''
+                };
+                this.processInput = { number: '', object: '', deadline: '' };
+                this.preferenceInput = '';
+                this.processError = '';
+            },
+
+            clearSearch() {
+                this.search.term = '';
+                this.search.criteria = 'all';
+            },
+
+            checkStatus(member) {
+                var today = new Date();
+                today.setHours(0,0,0,0);
+                var periods = [
+                    { start: member.vacation1_start, end: member.vacation1_end },
+                    { start: member.vacation2_start, end: member.vacation2_end },
+                    { start: member.vacation3_start, end: member.vacation3_end }
+                ];
+                for (var i = 0; i < periods.length; i++) {
+                    var p = periods[i];
+                    if (p.start && p.end) {
+                        var dStart = new Date(p.start);
+                        var dEnd = new Date(p.end);
+                        dStart.setHours(0,0,0,0); dEnd.setHours(0,0,0,0);
+                        if (today >= dStart && today <= dEnd) return 'Em Férias';
+                    }
+                }
+                return 'À Disposição';
+            },
+
+            formatDate(dateStr) {
+                if (!dateStr) return '';
+                try {
+                    var parts = dateStr.split('-');
+                    if (parts.length === 3) return parts[2] + '/' + parts[1] + '/' + parts[0];
+                } catch(e) {}
+                return dateStr;
+            }
+        }
+    });
+</script>
+
+</body>
+</html>
