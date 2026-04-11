@@ -181,7 +181,7 @@
             </div>
         </div>
 
-        <!-- 2. BARRA DE PESQUISA (Agora com mais destaque) -->
+        <!-- 2. BARRA DE PESQUISA -->
         <div class="card mb-4 border-primary">
             <div class="card-header bg-light text-primary fw-bold">
                 <i class="bi bi-search"></i> Pesquisar na Equipe
@@ -304,7 +304,6 @@
         const SUPABASE_URL = 'https://keqrzdmoeqsagzdsqhkk.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtlcXJ6ZG1vZXFzYWd6ZHNxaGtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODUwMzEsImV4cCI6MjA5MTQ2MTAzMX0.y8fEwD8UOUByr98YvXrc6_bm94YWOicEtoB56jDLcbw'; 
         
-        // Correção do cliente Supabase
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         new Vue({
@@ -389,6 +388,7 @@
                 setupRealtime() {
                     db.channel('equipe_changes')
                         .on('postgres_changes', { event: '*', schema: 'public', table: 'equipe' }, payload => {
+                            // O Realtime agora serve apenas como backup ou para sincronizar abas diferentes
                             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
                                 this.$set(this.membersMap, payload.new.id, payload.new);
                             } else if (payload.eventType === 'DELETE') {
@@ -456,16 +456,30 @@
                     this.processError = '';
                 },
                 async toggleStatusInTable(member, processIndex) {
-                    var processes = this.getProcessArray(member);
+                    // Clona os processos para não mutar diretamente antes de salvar
+                    var processes = JSON.parse(JSON.stringify(this.getProcessArray(member)));
                     var current = processes[processIndex].status;
                     processes[processIndex].status = (current === 'Pendente' ? 'Concluído' : 'Pendente');
                     
-                    const { error } = await db
+                    // Atualiza localmente IMEDIATAMENTE para UX rápida
+                    var updatedMember = { ...member, processes_json: processes };
+                    this.$set(this.membersMap, member.id, updatedMember);
+                    
+                    // Salva no banco em background
+                    const { data, error } = await db
                         .from('equipe')
                         .update({ processes_json: processes })
-                        .eq('id', member.id);
+                        .eq('id', member.id)
+                        .select(); // <--- ADICIONADO SELECT
                         
-                    if (error) console.error('Erro ao atualizar status:', error);
+                    if (error) {
+                        console.error('Erro ao atualizar status:', error);
+                        // Reverte em caso de erro
+                        this.$set(this.membersMap, member.id, member);
+                    } else if (data && data.length > 0) {
+                        // Confirma com o dado real do banco
+                        this.$set(this.membersMap, member.id, data[0]);
+                    }
                 },
                 removeProcess(index) {
                     this.form.processList.splice(index, 1);
@@ -511,14 +525,35 @@
                     };
 
                     if (this.form.id) {
-                        const { error } = await db.from('equipe').update(dataToSave).eq('id', this.form.id);
-                        if (error) alert('Erro ao atualizar: ' + error.message);
+                        // UPDATE
+                        const { data, error } = await db
+                            .from('equipe')
+                            .update(dataToSave)
+                            .eq('id', this.form.id)
+                            .select(); // <--- ADICIONADO SELECT
+                            
+                        if (error) {
+                            alert('Erro ao atualizar: ' + error.message);
+                        } else if (data && data.length > 0) {
+                            // Atualiza interface instantaneamente
+                            this.$set(this.membersMap, data[0].id, data[0]);
+                            this.resetForm();
+                        }
                     } else {
-                        const { error } = await db.from('equipe').insert([dataToSave]);
-                        if (error) alert('Erro ao salvar: ' + error.message);
+                        // INSERT
+                        const { data, error } = await db
+                            .from('equipe')
+                            .insert([dataToSave])
+                            .select(); // <--- ADICIONADO SELECT
+                            
+                        if (error) {
+                            alert('Erro ao salvar: ' + error.message);
+                        } else if (data && data.length > 0) {
+                            // Atualiza interface instantaneamente
+                            this.$set(this.membersMap, data[0].id, data[0]);
+                            this.resetForm();
+                        }
                     }
-                    
-                    this.resetForm();
                 },
                 editMember(member) {
                     var cloned = JSON.parse(JSON.stringify(member));
@@ -546,8 +581,16 @@
                 },
                 async deleteMember(id) {
                     if (confirm('Deseja realmente excluir este registro?')) {
+                        // Remove da tela instantaneamente para UX rápida
+                        const memberBackup = this.membersMap[id];
+                        this.$delete(this.membersMap, id);
+                        
                         const { error } = await db.from('equipe').delete().eq('id', id);
-                        if (error) alert('Erro ao excluir: ' + error.message);
+                        if (error) {
+                            // Se der erro no banco, devolve para a tela
+                            this.$set(this.membersMap, id, memberBackup);
+                            alert('Erro ao excluir: ' + error.message);
+                        }
                     }
                 },
                 resetForm() {
